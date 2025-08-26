@@ -11,7 +11,7 @@ function resolveStore(
 	if (typeof store === "object" && "incr" in store)
 		return store as RateLimitStore;
 	throw new Error(
-		"Unsupported store provided. Redis store not implemented yet.",
+		"Unsupported store provided. Only memory store is supported at this time.",
 	);
 }
 
