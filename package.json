@@ -1,15 +1,46 @@
 {
-  "name": "elysia-gatekeeper",
-  "version": "1.0.50",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "bun run --watch src/index.ts"
-  },
-  "dependencies": {
-    "elysia": "latest"
-  },
-  "devDependencies": {
-    "bun-types": "latest"
-  },
-  "module": "src/index.js"
+	"name": "elysia-gatekeeper",
+	"version": "1.0.50",
+	"description": "A rate limiter for Elysia",
+	"type": "module",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		"./package.json": "./package.json",
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/tdanks2000/elysia-gatekeeper"
+	},
+	"author": "tdanks2000",
+	"license": "MIT",
+	"keywords": [
+		"elysia",
+		"rate-limit",
+		"limit",
+		"rate-limiter",
+		"ratelimit"
+	],
+	"publishConfig": {
+		"access": "public"
+	},
+	"files": [
+		"dist"
+	],
+	"scripts": {
+		"test": "bun test",
+		"build": "tsdown"
+	},
+	"dependencies": {
+		"elysia": "latest"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.2.2",
+		"bun-types": "latest",
+		"tsdown": "^0.14.2"
+	}
 }
