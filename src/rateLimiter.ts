@@ -1,8 +1,14 @@
 import type { Context, Elysia } from "elysia";
-import type { RateLimiterOptions, RateLimitStore } from "./@types";
+import type {
+	RateLimiterOptions,
+	RateLimitStore,
+	RateLimitStrategy,
+} from "./@types";
 import { computeRemaining, computeResetSeconds } from "./core/compute";
 import { applyHeaders, computeHeaderFlags } from "./core/headers";
 import { MemoryStore } from "./stores/memory";
+import { fixedWindowStrategy } from "./strategies/fixed";
+import { slidingWindowStrategy } from "./strategies/sliding";
 
 function resolveStore(
 	store: RateLimiterOptions["store"] | undefined,
@@ -12,6 +18,18 @@ function resolveStore(
 		return store as RateLimitStore;
 	throw new Error(
 		"Unsupported store provided. Only memory store is supported at this time.",
+	);
+}
+
+function resolveStrategy(
+	strategy: RateLimiterOptions["strategy"] | undefined,
+): RateLimitStrategy {
+	if (!strategy || strategy === "fixed") return fixedWindowStrategy;
+	if (strategy === "sliding") return slidingWindowStrategy;
+	if (typeof strategy === "object" && "incr" in strategy)
+		return strategy as RateLimitStrategy;
+	throw new Error(
+		"Unsupported strategy provided. Use 'fixed', 'sliding', or a custom strategy object.",
 	);
 }
 
@@ -32,6 +50,7 @@ export function rateLimiter(
 
 	const headerFlags = computeHeaderFlags({ headers, draftSpecHeaders });
 	const backend = resolveStore(store);
+	const strategyImpl = resolveStrategy(userOptions.strategy);
 
 	return (app: Elysia) =>
 		app
@@ -46,7 +65,11 @@ export function rateLimiter(
 					(await (keyGenerator
 						? keyGenerator(ctx)
 						: defaultKeyGenerator(ctx))) || "anonymous";
-				const { totalHits, resetMs } = await backend.incr(key, windowMs);
+				const { totalHits, resetMs } = await strategyImpl.incr(
+					backend,
+					key,
+					windowMs,
+				);
 				const remaining = computeRemaining(totalHits, resolvedMax);
 				applyHeaders(ctx.set, headerFlags, {
 					limit: resolvedMax,

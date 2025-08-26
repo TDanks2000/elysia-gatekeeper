@@ -1,12 +1,4 @@
-import type { RateLimitStore } from "../@types";
-
-export interface RateLimitStrategy {
-	incr(
-		store: RateLimitStore,
-		key: string,
-		windowMs: number,
-	): Promise<{ totalHits: number; resetMs: number }>;
-}
+import type { RateLimitStrategy } from "../@types";
 
 export const fixedWindowStrategy: RateLimitStrategy = {
 	async incr(store, key, windowMs) {
