@@ -1,6 +1,6 @@
 {
 	"name": "elysia-gatekeeper",
-	"version": "1.0.50",
+	"version": "1.0.51",
 	"description": "A rate limiter for Elysia",
 	"type": "module",
 	"module": "./dist/index.js",
