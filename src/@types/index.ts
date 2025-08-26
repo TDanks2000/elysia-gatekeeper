@@ -16,7 +16,10 @@ export interface RateLimiterOptions {
 	store?: "memory" | RateLimitStore;
 	strategy?: "fixed" | "sliding" | RateLimitStrategy;
 	statusCode?: number;
-	message?: string | ((ctx: Context) => Response);
+	message?:
+		| string
+		| Response
+		| ((ctx: Context) => string | Response | Promise<string | Response>);
 	draftSpecHeaders?: boolean;
 }
 

@@ -52,6 +52,53 @@ export function rateLimiter(
 	const backend = resolveStore(store);
 	const strategyImpl = resolveStrategy(userOptions.strategy);
 
+	// Prepare a helper to always return a fresh Response for blocked requests.
+	let cachedStaticResponseBody: Uint8Array | null | undefined;
+	let cachedStaticResponseHeaders: Headers | undefined;
+
+	const buildBlockedResponse = async (ctx: Context): Promise<Response> => {
+		if (typeof message === "function") {
+			const resolved = await message(ctx);
+			if (typeof resolved === "string") {
+				return new Response(resolved, { status: statusCode });
+			}
+			if (resolved instanceof Response) {
+				try {
+					const body = await resolved.clone().arrayBuffer();
+					return new Response(body, {
+						status: statusCode,
+						headers: resolved.headers,
+					});
+				} catch {
+					return new Response(null, {
+						status: statusCode,
+						headers: resolved.headers,
+					});
+				}
+			}
+			return new Response("Too many requests", { status: statusCode });
+		}
+
+		if (message instanceof Response) {
+			if (cachedStaticResponseBody === undefined) {
+				try {
+					const body = await message.clone().arrayBuffer();
+					cachedStaticResponseBody = new Uint8Array(body);
+				} catch {
+					cachedStaticResponseBody = null;
+				}
+				cachedStaticResponseHeaders = new Headers(message.headers);
+			}
+
+			return new Response(cachedStaticResponseBody ?? null, {
+				status: statusCode,
+				headers: cachedStaticResponseHeaders,
+			});
+		}
+
+		return new Response(message, { status: statusCode });
+	};
+
 	return (app: Elysia) =>
 		app
 			.derive(() => ({
@@ -80,8 +127,7 @@ export function rateLimiter(
 				if (totalHits > resolvedMax) {
 					ctx.set.status = statusCode;
 					ctx.set.headers["Retry-After"] = String(computeResetSeconds(resetMs));
-					if (typeof message === "function") return message(ctx);
-					return new Response(message, { status: statusCode });
+					return buildBlockedResponse(ctx);
 				}
 			});
 }
