@@ -1,36 +1,15 @@
 import type { Context, Elysia } from "elysia";
-import type {
-	RateLimiterOptions,
-	RateLimitStore,
-	RateLimitStrategy,
-} from "./@types";
+import type { RateLimiterOptions, RateLimitStore } from "./@types";
 import { computeRemaining, computeResetSeconds } from "./core/compute";
 import { applyHeaders, computeHeaderFlags } from "./core/headers";
 import { MemoryStore } from "./stores/memory";
-import { fixedWindowStrategy } from "./strategies/fixed";
-import { slidingWindowStrategy } from "./strategies/sliding";
 
 function resolveStore(
 	store: RateLimiterOptions["store"] | undefined,
 ): RateLimitStore {
 	if (!store || store === "memory") return new MemoryStore();
-	if (typeof store === "object" && "incr" in store)
-		return store as RateLimitStore;
-	throw new Error(
-		"Unsupported store provided. Only memory store is supported at this time.",
-	);
-}
-
-function resolveStrategy(
-	strategy: RateLimiterOptions["strategy"] | undefined,
-): RateLimitStrategy {
-	if (!strategy || strategy === "fixed") return fixedWindowStrategy;
-	if (strategy === "sliding") return slidingWindowStrategy;
-	if (typeof strategy === "object" && "incr" in strategy)
-		return strategy as RateLimitStrategy;
-	throw new Error(
-		"Unsupported strategy provided. Use 'fixed', 'sliding', or a custom strategy object.",
-	);
+	if (typeof store === "object" && "incr" in store) return store;
+	throw new Error("Unsupported store provided.");
 }
 
 export function rateLimiter(
@@ -50,54 +29,6 @@ export function rateLimiter(
 
 	const headerFlags = computeHeaderFlags({ headers, draftSpecHeaders });
 	const backend = resolveStore(store);
-	const strategyImpl = resolveStrategy(userOptions.strategy);
-
-	// Prepare a helper to always return a fresh Response for blocked requests.
-	let cachedStaticResponseBody: Uint8Array | null | undefined;
-	let cachedStaticResponseHeaders: Headers | undefined;
-
-	const buildBlockedResponse = async (ctx: Context): Promise<Response> => {
-		if (typeof message === "function") {
-			const resolved = await message(ctx);
-			if (typeof resolved === "string") {
-				return new Response(resolved, { status: statusCode });
-			}
-			if (resolved instanceof Response) {
-				try {
-					const body = await resolved.clone().arrayBuffer();
-					return new Response(body, {
-						status: statusCode,
-						headers: resolved.headers,
-					});
-				} catch {
-					return new Response(null, {
-						status: statusCode,
-						headers: resolved.headers,
-					});
-				}
-			}
-			return new Response("Too many requests", { status: statusCode });
-		}
-
-		if (message instanceof Response) {
-			if (cachedStaticResponseBody === undefined) {
-				try {
-					const body = await message.clone().arrayBuffer();
-					cachedStaticResponseBody = new Uint8Array(body);
-				} catch {
-					cachedStaticResponseBody = null;
-				}
-				cachedStaticResponseHeaders = new Headers(message.headers);
-			}
-
-			return new Response(cachedStaticResponseBody ?? null, {
-				status: statusCode,
-				headers: cachedStaticResponseHeaders,
-			});
-		}
-
-		return new Response(message, { status: statusCode });
-	};
 
 	return (app: Elysia) =>
 		app
@@ -112,11 +43,7 @@ export function rateLimiter(
 					(await (keyGenerator
 						? keyGenerator(ctx)
 						: defaultKeyGenerator(ctx))) || "anonymous";
-				const { totalHits, resetMs } = await strategyImpl.incr(
-					backend,
-					key,
-					windowMs,
-				);
+				const { totalHits, resetMs } = await backend.incr(key, windowMs);
 				const remaining = computeRemaining(totalHits, resolvedMax);
 				applyHeaders(ctx.set, headerFlags, {
 					limit: resolvedMax,
@@ -127,7 +54,8 @@ export function rateLimiter(
 				if (totalHits > resolvedMax) {
 					ctx.set.status = statusCode;
 					ctx.set.headers["Retry-After"] = String(computeResetSeconds(resetMs));
-					return buildBlockedResponse(ctx);
+					if (typeof message === "function") return message(ctx);
+					return new Response(message, { status: statusCode });
 				}
 			});
 }

@@ -1,6 +1,4 @@
-import type { Context } from "elysia";
-
-export interface RateLimiterOptions {
+export interface RateLimiterOptions<Context = unknown> {
 	windowMs: number;
 	max: number | ((ctx: Context) => number | Promise<number>);
 	headers?:
@@ -14,12 +12,8 @@ export interface RateLimiterOptions {
 	keyGenerator?: (ctx: Context) => string | Promise<string>;
 	skip?: (ctx: Context) => boolean | Promise<boolean>;
 	store?: "memory" | RateLimitStore;
-	strategy?: "fixed" | "sliding" | RateLimitStrategy;
 	statusCode?: number;
-	message?:
-		| string
-		| Response
-		| ((ctx: Context) => string | Response | Promise<string | Response>);
+	message?: string | ((ctx: Context) => Response);
 	draftSpecHeaders?: boolean;
 }
 
@@ -30,14 +24,6 @@ export interface RateLimitStore {
 	): Promise<{ totalHits: number; resetMs: number }>;
 	resetKey(key: string): Promise<void>;
 	shutdown?(): Promise<void>;
-}
-
-export interface RateLimitStrategy {
-	incr(
-		store: RateLimitStore,
-		key: string,
-		windowMs: number,
-	): Promise<{ totalHits: number; resetMs: number }>;
 }
 
 export interface RateLimiterComputation {
